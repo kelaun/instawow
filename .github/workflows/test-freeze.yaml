@@ -1,0 +1,57 @@
+---
+name: Like freeze but more testy
+on:
+  push:
+defaults:
+  run:
+    shell: bash
+jobs:
+  freeze-cli:
+    env:
+      PYOX_VERSION: '0.7.0'
+    strategy:
+      matrix:
+        os: [windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+    - name: Clone the repo
+      uses: actions/checkout@v2
+    - name: Install Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.7'
+    - name: Build instawow and rename the sdist to be picked up by PyOxidizer
+      run: |
+        python -m pip install nox
+        python -m nox -s build
+        mv dist/*.tar.gz instawow.tar.gz
+        python -m nox -s clobber_build_artefacts
+    - name: Install Rust toolchain
+      id: install-rust
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: nightly
+    - name: Restore PyOxidizer from build cache
+      uses: actions/cache@v2
+      with:
+        path: ~/.cargo
+        key: >-
+          cargo-cache-${{ runner.os }}-${{ steps.install-rust.outputs.rustc_hash }}-${{ env.PYOX_VERSION }}_1
+    - name: Install PyOxidizer
+      run: |
+        cargo install --version $PYOX_VERSION pyoxidizer
+    - name: Freeze instawow and copy it into the 'dist' directory
+      run: |
+        mkdir -p dist
+        pyoxidizer build --release | tee >(
+          instawow_path=$(tail -n 1 | cut -c 23-)
+          cp $instawow_path dist/${instawow_path##*[\\/]}
+        )
+      env:
+        RUSTFLAGS: -C target-feature=+crt-static
+    - name: Upload binary
+      uses: actions/upload-artifact@v2
+      with:
+        name: instawow-${{ matrix.os }}-${{ needs.extract-tag.outputs.tag }}
+        path: dist/instawow*
