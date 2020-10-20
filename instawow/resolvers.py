@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import AsyncIterable, Callable, Sequence
+from collections.abc import AsyncIterable, Callable, Sequence, Set
 from datetime import datetime, timezone
 import enum
 from itertools import chain, count, takewhile
@@ -200,7 +200,7 @@ class MultiPkgModel(BaseModel):
 class Resolver:
     source: ClassVar[str]
     name: ClassVar[str]
-    strategies: ClassVar[set[Strategy]]
+    strategies: ClassVar[Set[Strategy]]
 
     def __init__(self, manager: ManagerT) -> None:
         self.manager = manager

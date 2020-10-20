@@ -17,6 +17,7 @@ from loguru import logger
 
 from . import DB_REVISION, exceptions as E
 from .models import Pkg, PkgFolder, PkgVersionLog, is_pkg
+from .plugins import load_plugins
 from .resolvers import (
     Catalogue,
     CurseResolver,
@@ -289,21 +290,27 @@ def _with_lock(
 
 
 class Manager:
+    DEFAULT_RESOLVERS = (
+        CurseResolver,
+        WowiResolver,
+        TukuiResolver,
+        GithubResolver,
+        InstawowResolver,
+    )
+
     def __init__(
         self,
         config: Config,
         database: SqlaSession,
         catalogue: O[Catalogue] = None,
-        resolver_classes: Sequence[type[Resolver]] = (
-            CurseResolver,
-            WowiResolver,
-            TukuiResolver,
-            GithubResolver,
-            InstawowResolver,
-        ),
     ) -> None:
         self.config = config
         self.database = database
+
+        plugin_hook = load_plugins()
+        resolver_classes = chain(
+            self.DEFAULT_RESOLVERS, (r for g in plugin_hook.instawow_add_resolvers() for r in g)
+        )
         self.resolvers = _ResolverDict((r.source, r(self)) for r in resolver_classes)
         self._catalogue = catalogue
 
