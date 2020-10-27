@@ -180,6 +180,7 @@ class _PkgModel_PkgFolder(_OrmModel):
 
 class _PkgModel_PkgOptions(_OrmModel):
     strategy: Strategy
+    is_deactivated: bool
 
 
 class _PkgModel_PkgDep(_OrmModel):

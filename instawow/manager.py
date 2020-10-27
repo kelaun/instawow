@@ -9,7 +9,7 @@ from itertools import chain, compress, filterfalse, repeat, starmap
 import json
 from pathlib import Path, PurePath
 from shutil import copy
-from tempfile import NamedTemporaryFile
+from tempfile import NamedTemporaryFile, mkdtemp
 from typing import (
     TYPE_CHECKING,
     AbstractSet,
@@ -444,7 +444,6 @@ class Manager:
             PkgVersionLog(version=pkg.version, pkg_source=pkg.source, pkg_id=pkg.id)
         )
         self.database.commit()
-
         return E.PkgInstalled(pkg)
 
     def update_pkg(self, old_pkg: Pkg, new_pkg: Pkg, archive: Path) -> E.PkgUpdated:
@@ -480,7 +479,6 @@ class Manager:
             PkgVersionLog(version=new_pkg.version, pkg_source=new_pkg.source, pkg_id=new_pkg.id)
         )
         self.database.commit()
-
         return E.PkgUpdated(old_pkg, new_pkg)
 
     def remove_pkg(self, pkg: Pkg) -> E.PkgRemoved:
@@ -492,8 +490,56 @@ class Manager:
         )
         self.database.delete(pkg)
         self.database.commit()
-
         return E.PkgRemoved(pkg)
+
+    def deactivate_pkg(
+        self, pkg: Pkg, reactivate: bool
+    ) -> Union[E.PkgDeactivated, E.PkgReactivated]:
+        "Deactivate or reactivate an installed package."
+        if pkg.options.is_deactivated is not reactivate:
+            return E.PkgDeactivated(pkg) if pkg.options.is_deactivated else E.PkgReactivated(pkg)
+        elif reactivate:
+            top_level_folders = [PurePath(f.name).name for f in pkg.folders]
+            installed_conflicts: List[Pkg] = (
+                self.database.query(Pkg)
+                .join(Pkg.folders)
+                .filter(PkgFolder.name.in_(top_level_folders))
+                .all()
+            )
+            if installed_conflicts:
+                raise E.PkgConflictsWithInstalled(installed_conflicts)
+
+            unreconciled_conflicts = set(top_level_folders) & {
+                f.name for f in self.config.addon_dir.iterdir()
+            }
+            if unreconciled_conflicts:
+                raise E.PkgConflictsWithUnreconciled(unreconciled_conflicts)
+
+            for old_folder, new_folder in zip(pkg.folders, top_level_folders):
+                move(self.config.addon_dir / old_folder.name, self.config.addon_dir / new_folder)
+            trash(
+                ((self.config.addon_dir / pkg.folders[0].name).parent,),
+                dst=self.config.temp_dir,
+            )
+
+            pkg.folders = [PkgFolder(name=f) for f in top_level_folders]
+            pkg.options.is_deactivated = False
+            self.database.commit()
+            return E.PkgReactivated(pkg)
+        else:
+            parent_folder = Path(mkdtemp(dir=self.config.addon_dir, prefix=pkg.folders[0].name))
+            for folder in (f.name for f in pkg.folders):
+                move(self.config.addon_dir / folder, parent_folder / folder)
+
+            pkg.folders = [
+                # We want the path to be portable so we're using a forward slash
+                # instead of a platform-specific delimiter
+                PkgFolder(name='/'.join((parent_folder.name, f.name)))
+                for f in pkg.folders
+            ]
+            pkg.options.is_deactivated = True
+            self.database.commit()
+            return E.PkgDeactivated(pkg)
 
     @_with_lock('load master catalogue', False)
     async def synchronise(self) -> Catalogue:
@@ -694,6 +740,26 @@ class Manager:
             defns,
             _error_out(E.PkgNotInstalled()),
             ((d, partial(t(self.remove_pkg), p)) for d, p in zip(defns, maybe_pkgs) if p),
+        )
+        results: Dict[Defn, Any] = {
+            d: await capture_manager_exc_async(c()) for d, c in result_coros.items()
+        }
+        return results
+
+    @_with_lock('change state')
+    async def deactivate(
+        self, defns: Sequence[Defn], reactivate: bool = False
+    ) -> Dict[Defn, E.ManagerResult]:
+        "Deactivate and reactivate installed packages."
+        maybe_pkgs = (self.get_pkg(d) for d in defns)
+        result_coros = chain_dict(
+            defns,
+            _error_out(E.PkgNotInstalled()),
+            (
+                (d, partial(t(self.deactivate_pkg), p, reactivate))
+                for d, p in zip(defns, maybe_pkgs)
+                if p
+            ),
         )
         results: Dict[Defn, Any] = {
             d: await capture_manager_exc_async(c()) for d, c in result_coros.items()

@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, List, Optional as O
 
 from sqlalchemy import (
+    Boolean,
     Column,
     DateTime,
     ForeignKeyConstraint,
@@ -132,12 +133,13 @@ class PkgOptions(ModelBase):
     __table_args__ = (ForeignKeyConstraint(['pkg_source', 'pkg_id'], ['pkg.source', 'pkg.id']),)
 
     strategy = Column(String, nullable=False)
+    is_deactivated = Column(Boolean, nullable=False, default=False)
     pkg_source = Column(String, primary_key=True)
     pkg_id = Column(String, primary_key=True)
 
     if TYPE_CHECKING:
 
-        def __init__(self, *, strategy: str) -> None:
+        def __init__(self, *, strategy: str, is_deactivated: bool = False) -> None:
             ...
 
 

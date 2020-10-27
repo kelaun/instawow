@@ -311,6 +311,16 @@ def remove(obj: ManagerWrapper, addons: Sequence[Defn]) -> None:
 
 
 @main.command()
+@click.argument('addons', nargs=-1, required=True, callback=_callbackify(parse_into_defn))
+@click.option('--reactivate', is_flag=True, default=False, help='Reactivate add-ons.')
+@click.pass_obj
+def deactivate(obj: ManagerWrapper, addons: Sequence[Defn], reactivate: bool) -> None:
+    "Deactivate and reactivate add-ons."
+    results = obj.m.run(obj.m.deactivate(addons, reactivate))
+    Report(results.items()).generate_and_exit()
+
+
+@main.command()
 @click.argument('addon', callback=_callbackify(parse_into_defn))
 @click.option(
     '--undo',

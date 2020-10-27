@@ -1,0 +1,28 @@
+"""
+Add ``is_deactivated`` package option.
+
+Revision ID: 846998b51cd0
+Revises: e4921edb1154
+Create Date: 2020-10-27 20:21:21.752577
+
+"""
+from alembic import op
+import sqlalchemy as sa
+
+# revision identifiers, used by Alembic.
+revision = '846998b51cd0'
+down_revision = 'e4921edb1154'
+branch_labels = None
+depends_on = None
+
+
+def upgrade():
+    with op.batch_alter_table('pkg_options', schema=None) as batch_op:
+        batch_op.add_column(
+            sa.Column('is_deactivated', sa.Boolean(), nullable=False, default=False)
+        )
+
+
+def downgrade():
+    with op.batch_alter_table('pkg_options', schema=None) as batch_op:
+        batch_op.drop_column('is_deactivated')
