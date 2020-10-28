@@ -1,5 +1,5 @@
 """
-Add ``is_deactivated`` package option.
+Add ``is_stashed`` package option.
 
 Revision ID: 846998b51cd0
 Revises: e4921edb1154
@@ -18,11 +18,9 @@ depends_on = None
 
 def upgrade():
     with op.batch_alter_table('pkg_options', schema=None) as batch_op:
-        batch_op.add_column(
-            sa.Column('is_deactivated', sa.Boolean(), nullable=False, default=False)
-        )
+        batch_op.add_column(sa.Column('is_stashed', sa.Boolean(), nullable=False, default=False))
 
 
 def downgrade():
     with op.batch_alter_table('pkg_options', schema=None) as batch_op:
-        batch_op.drop_column('is_deactivated')
+        batch_op.drop_column('is_stashed')

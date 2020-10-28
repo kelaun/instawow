@@ -133,13 +133,13 @@ class PkgOptions(ModelBase):
     __table_args__ = (ForeignKeyConstraint(['pkg_source', 'pkg_id'], ['pkg.source', 'pkg.id']),)
 
     strategy = Column(String, nullable=False)
-    is_deactivated = Column(Boolean, nullable=False, default=False)
+    is_stashed = Column(Boolean, nullable=False, default=False)
     pkg_source = Column(String, primary_key=True)
     pkg_id = Column(String, primary_key=True)
 
     if TYPE_CHECKING:
 
-        def __init__(self, *, strategy: str, is_deactivated: bool = False) -> None:
+        def __init__(self, *, strategy: str, is_stashed: bool = False) -> None:
             ...
 
 

@@ -311,12 +311,12 @@ def remove(obj: ManagerWrapper, addons: Sequence[Defn]) -> None:
 
 
 @main.command()
-@click.argument('addons', nargs=-1, required=True, callback=_callbackify(parse_into_defn))
-@click.option('--reactivate', is_flag=True, default=False, help='Reactivate add-ons.')
+@click.argument('addon', callback=_callbackify(parse_into_defn))
+@click.option('--undo', is_flag=True, default=False, help='Put the folders back.')
 @click.pass_obj
-def deactivate(obj: ManagerWrapper, addons: Sequence[Defn], reactivate: bool) -> None:
-    "Deactivate and reactivate add-ons."
-    results = obj.m.run(obj.m.deactivate(addons, reactivate))
+def stash(obj: ManagerWrapper, addon: Defn, undo: bool) -> None:
+    "Stash away an add-on's folders."
+    results = obj.m.run(obj.m.stash([addon], undo))
     Report(results.items()).generate_and_exit()
 
 

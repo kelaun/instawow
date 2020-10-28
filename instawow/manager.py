@@ -483,22 +483,21 @@ class Manager:
 
     def remove_pkg(self, pkg: Pkg) -> E.PkgRemoved:
         "Remove a package."
-        trash(
-            [self.config.addon_dir / f.name for f in pkg.folders],
-            dst=self.config.temp_dir,
-            missing_ok=True,
-        )
+        if pkg.options.is_stashed:
+            folders = ((self.config.addon_dir / pkg.folders[0].name).parent,)
+        else:
+            folders = [self.config.addon_dir / f.name for f in pkg.folders]
+        trash(folders, dst=self.config.temp_dir, missing_ok=True)
+
         self.database.delete(pkg)
         self.database.commit()
         return E.PkgRemoved(pkg)
 
-    def deactivate_pkg(
-        self, pkg: Pkg, reactivate: bool
-    ) -> Union[E.PkgDeactivated, E.PkgReactivated]:
+    def stash_pkg(self, pkg: Pkg, undo: bool) -> Union[E.PkgStashed, E.PkgUnstashed]:
         "Deactivate or reactivate an installed package."
-        if pkg.options.is_deactivated is not reactivate:
-            return E.PkgDeactivated(pkg) if pkg.options.is_deactivated else E.PkgReactivated(pkg)
-        elif reactivate:
+        if pkg.options.is_stashed is not undo:
+            return E.PkgStashed(pkg) if pkg.options.is_stashed else E.PkgUnstashed(pkg)
+        elif undo:
             top_level_folders = [PurePath(f.name).name for f in pkg.folders]
             installed_conflicts: List[Pkg] = (
                 self.database.query(Pkg)
@@ -515,31 +514,37 @@ class Manager:
             if unreconciled_conflicts:
                 raise E.PkgConflictsWithUnreconciled(unreconciled_conflicts)
 
-            for old_folder, new_folder in zip(pkg.folders, top_level_folders):
-                move(self.config.addon_dir / old_folder.name, self.config.addon_dir / new_folder)
+            for old, new in zip(pkg.folders, top_level_folders):
+                move(self.config.addon_dir / old.name, self.config.addon_dir / new)
             trash(
                 ((self.config.addon_dir / pkg.folders[0].name).parent,),
                 dst=self.config.temp_dir,
             )
 
             pkg.folders = [PkgFolder(name=f) for f in top_level_folders]
-            pkg.options.is_deactivated = False
+            pkg.options.is_stashed = False
             self.database.commit()
-            return E.PkgReactivated(pkg)
+            return E.PkgUnstashed(pkg)
         else:
-            parent_folder = Path(mkdtemp(dir=self.config.addon_dir, prefix=pkg.folders[0].name))
-            for folder in (f.name for f in pkg.folders):
-                move(self.config.addon_dir / folder, parent_folder / folder)
+            import posixpath
+
+            parent_folder = Path(mkdtemp(dir=self.config.addon_dir, prefix='_instawow_'))
+            folders = [
+                (self.config.addon_dir / n, parent_folder / n)
+                for f in pkg.folders
+                for n in (f.name,)
+            ]
+            for old, new in folders:
+                move(old, new)
 
             pkg.folders = [
-                # We want the path to be portable so we're using a forward slash
-                # instead of a platform-specific delimiter
-                PkgFolder(name='/'.join((parent_folder.name, f.name)))
-                for f in pkg.folders
+                # Using forward slash as delim so that the path's portable
+                PkgFolder(name=posixpath.sep.join(f.relative_to(self.config.addon_dir).parts))
+                for _, f in folders
             ]
-            pkg.options.is_deactivated = True
+            pkg.options.is_stashed = True
             self.database.commit()
-            return E.PkgDeactivated(pkg)
+            return E.PkgStashed(pkg)
 
     @_with_lock('load master catalogue', False)
     async def synchronise(self) -> Catalogue:
@@ -747,19 +752,15 @@ class Manager:
         return results
 
     @_with_lock('change state')
-    async def deactivate(
-        self, defns: Sequence[Defn], reactivate: bool = False
+    async def stash(
+        self, defns: Sequence[Defn], undo: bool = False
     ) -> Dict[Defn, E.ManagerResult]:
-        "Deactivate and reactivate installed packages."
+        "Stash and unstash installed packages."
         maybe_pkgs = (self.get_pkg(d) for d in defns)
         result_coros = chain_dict(
             defns,
             _error_out(E.PkgNotInstalled()),
-            (
-                (d, partial(t(self.deactivate_pkg), p, reactivate))
-                for d, p in zip(defns, maybe_pkgs)
-                if p
-            ),
+            ((d, partial(t(self.stash_pkg), p, undo)) for d, p in zip(defns, maybe_pkgs) if p),
         )
         results: Dict[Defn, Any] = {
             d: await capture_manager_exc_async(c()) for d, c in result_coros.items()

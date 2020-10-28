@@ -44,18 +44,18 @@ class PkgRemoved(ManagerResult):
         self.old_pkg = old_pkg
 
 
-class PkgDeactivated(ManagerResult):
+class PkgStashed(ManagerResult):
     status = 'success'
-    message_template = 'deactivated'
+    message_template = 'stashed'
 
     def __init__(self, pkg: Pkg) -> None:
         super().__init__()
         self.pkg = pkg
 
 
-class PkgReactivated(ManagerResult):
+class PkgUnstashed(ManagerResult):
     status = 'success'
-    message_template = 'reactivated'
+    message_template = 'unstashed'
 
     def __init__(self, pkg: Pkg) -> None:
         super().__init__()
@@ -135,10 +135,6 @@ class PkgStrategyUnsupported(ManagerError):
     def __init__(self, strategy: Strategy) -> None:
         super().__init__()
         self.strategy = strategy
-
-
-class PkgIsDeactivated(ManagerError):
-    message_template = 'package is deactivated'
 
 
 class InternalError(ManagerResult, Exception):
