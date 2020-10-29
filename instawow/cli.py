@@ -312,16 +312,6 @@ def remove(obj: ManagerWrapper, addons: Sequence[Defn]) -> None:
 
 @main.command()
 @click.argument('addon', callback=_callbackify(parse_into_defn))
-@click.option('--undo', is_flag=True, default=False, help='Put the folders back.')
-@click.pass_obj
-def stash(obj: ManagerWrapper, addon: Defn, undo: bool) -> None:
-    "Stash away an add-on's folders."
-    results = obj.m.run(obj.m.stash([addon], undo))
-    Report(results.items()).generate_and_exit()
-
-
-@main.command()
-@click.argument('addon', callback=_callbackify(parse_into_defn))
 @click.option(
     '--undo',
     is_flag=True,
@@ -376,6 +366,20 @@ def rollback(ctx: click.Context, addon: Defn, undo: bool) -> None:
     Report(
         manager.run(manager.update([reconstructed_defn.with_version(selection)], True)).items()
     ).generate_and_exit()
+
+
+@main.command()
+@click.argument('addon', callback=_callbackify(parse_into_defn))
+@click.option('--undo', is_flag=True, default=False, help='Put the folders back.')
+@click.pass_obj
+def stash(obj: ManagerWrapper, addon: Defn, undo: bool) -> None:
+    """Stash away an add-on's folders.
+
+    Stashed add-ons will not be detected by the game but will continue to
+    receive updates.
+    """
+    results = obj.m.run(obj.m.stash([addon], undo))
+    Report(results.items()).generate_and_exit()
 
 
 @main.command()
@@ -533,9 +537,16 @@ class ListFormats(enum.Enum):
     show_default=True,
     help='Change the output format.',
 )
+@click.option(
+    '--stashed',
+    'stashed_only',
+    is_flag=True,
+    default=False,
+    help='List stashed add-ons only.',
+)
 @click.pass_obj
 def list_installed(
-    obj: ManagerWrapper, addons: Sequence[Defn], output_format: ListFormats
+    obj: ManagerWrapper, addons: Sequence[Defn], output_format: ListFormats, stashed_only: bool
 ) -> None:
     "List installed add-ons."
     from sqlalchemy import and_, or_
@@ -555,8 +566,10 @@ def list_installed(
         else:
             return pkg.description
 
-    pkgs = (
+    pkgs: List[models.Pkg] = (
         obj.m.database.query(models.Pkg)
+        .join(models.PkgOptions)
+        .filter(not stashed_only or models.PkgOptions.is_stashed)
         .filter(
             or_(
                 *(
