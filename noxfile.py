@@ -7,7 +7,10 @@ nox.options.envdir = '.py-nox'
 
 @nox.session(python=['3.7', '3.8', '3.9'])
 def test(session: nox.Session):
-    session.install('.[server, test]')
+    session.install(
+        '.[server, test]',
+        './tests/plugin',
+    )
     session.run('coverage', 'run', '-m', 'pytest')
     session.run('coverage', 'report', '-m')
 

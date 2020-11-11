@@ -154,3 +154,18 @@ async def test_resolve_github_pkgs(manager):
     )
     assert ('classic' in retail_and_classic.download_url) is manager.config.is_classic
     assert isinstance(missing, E.PkgNonexistent)
+
+
+@pytest.mark.asyncio
+async def test_plugin_hook_dummy_pkg_can_be_resolved(manager):
+    pytest.importorskip('instawow_test_plugin')
+    defn = Defn('me', 'bar')
+    results = await manager.resolve([defn])
+    assert isinstance(results[defn], Pkg)
+
+
+@pytest.mark.asyncio
+async def test_invalid_source_returns_invalid_exc(manager):
+    defn = Defn('bar', 'baz')
+    results = await manager.resolve([defn])
+    assert isinstance(results[defn], E.PkgSourceInvalid)

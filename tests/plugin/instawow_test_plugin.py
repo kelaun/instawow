@@ -13,20 +13,20 @@ def foo():
     print('success!')
 
 
-class FooResolver(Resolver):
-    source = 'foo'
-    name = 'Foo Inc.'
+class MyResolver(Resolver):
+    source = 'me'
+    name = "It's me"
     strategies = frozenset({Strategy.default})
 
     async def resolve_one(self, defn: Defn, metadata: None) -> Pkg:
         return Pkg(
             source=self.source,
-            id='1',
-            slug=defn.alias,
+            id='bar',
+            slug='bar',
             name='Bar',
-            description='The quintessential bar add-on, brought to you by Foo',
+            description='The quintessential bar add-on, brought to you by yours truly',
             url='http://example.com/',
-            download_url='...',
+            download_url='file:///...',
             date_published=datetime.now(),
             version='0',
             options=PkgOptions(strategy=defn.strategy.name),
@@ -40,4 +40,4 @@ def instawow_add_commands():
 
 @instawow.plugins.hookimpl
 def instawow_add_resolvers():
-    return (FooResolver,)
+    return (MyResolver,)
